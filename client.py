@@ -1,24 +1,32 @@
 import socket
+import sys
 
 
 def send_command(host, port, command):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            print(f"Attempting to connect to {host}:{port}...")
             s.connect((host, port))
-            print("Connection successful. Sending command...")
-            
-            s.sendall(command.encode('utf-8'))
-            data = s.recv(1024)
+            s.sendall(command.encode("utf-8"))
+
+            data = s.recv(4096)
+
             print(f"\n--- Server Response ---")
-            print(data.decode('utf-8'))
+            print(data.decode("utf-8"))
             print("-----------------------")
-            
+
         except ConnectionRefusedError:
-            print(f"❌ Connection failed. Ensure the server script ({host}:{port}) is running.")
+            print(f"Error: Could not connect to {host}:{port}")
         except Exception as e:
-            print(f"❌ An error occurred: {e}")
+            print(f"Error: {e}")
 
-if __name__ == '__main__':
 
-    send_command('192.168.137.1' , 65432, input("Command to execute : "))
+if __name__ == "__main__":
+    HOST = "192.168.137.1"
+    PORT = 65432
+
+    if len(sys.argv) > 1:
+        cmd = " ".join(sys.argv[1:])
+    else:
+        cmd = input("Command to execute : ")
+
+    send_command(HOST, PORT, cmd)
