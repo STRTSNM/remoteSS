@@ -8,7 +8,7 @@ def send_command(host, port, command):
             s.connect((host, port))
             s.sendall(command.encode("utf-8"))
 
-            data = s.recv(4096)
+            data = s.recv(1024)
 
             print(f"\n--- Server Response ---")
             print(data.decode("utf-8"))

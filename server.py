@@ -4,10 +4,11 @@ import subprocess
 import time
 from datetime import datetime
 
-import pyscreenshot
+from PIL import ImageGrab
 
 HOST = "0.0.0.0"
 PORT = 65432
+HOTSPOT_IP = "192.168.137.1"
 
 SS_FOLDER = f"C:\\Users\\{os.getlogin()}\\Desktop\\testing"
 if not os.path.exists(SS_FOLDER):
@@ -17,7 +18,7 @@ encd_cmd = "WwBXAGkAbgBkAG8AdwBzAC4AUwB5AHMAdABlAG0ALgBVAHMAZQByAFAAcgBvAGYAaQBs
 
 
 def sc():
-    image = pyscreenshot.grab()
+    image = ImageGrab.grab()
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     image.save(f"{SS_FOLDER}\\{current_datetime}.png")
     print("SCREENSHOT SAVED")
@@ -26,24 +27,25 @@ def sc():
 def execute_command(command):
     try:
         print(f"Executing: {command}")
-
         if command == "ss":
             print("taking SCREENSHOT")
             sc()
             return "SCREENSHOT SAVED"
 
-        # non blocking calls
         elif command.lower().startswith("start "):
             program = command[6:].strip()
-
             subprocess.Popen(program, shell=True)
-
             return f"Background process started: {program}"
 
-        # raw commands
         else:
+            # Added timeout to prevent freezing on inputs
             result = subprocess.run(
-                command, shell=True, check=True, capture_output=True, text=True
+                command,
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return result.stdout.strip()
 
@@ -53,40 +55,64 @@ def execute_command(command):
         return f"ERROR: {e}"
 
 
-def start_server():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen()
-        print(f"Server started on {HOST}:{PORT}. Waiting for connection...")
-
-        while True:
-            conn, addr = s.accept()
-            with conn:
-                print(f"Connected by : {addr}")
-
-                data = conn.recv(1024)
-                if not data:
-                    break
-
-                command = data.decode("utf-8").strip()
-                print(f"Received command: '{command}'")
-
-                response_str = execute_command(command)
-
-                conn.sendall(response_str.encode("utf-8"))
-
-                print(f"Sent response (snippet): {response_str[:50].strip()}...")
+def is_hotspot_active():
+    """
+    Checks if the default hotspot IP exists in ipconfig.
+    """
+    try:
+        output = subprocess.check_output("ipconfig", text=True)
+        if HOTSPOT_IP in output:
+            return True
+        return False
+    except:
+        return False
 
 
-if __name__ == "__main__":
-    time.sleep(2)
-
+def turn_on_hotspot():
+    print("Attempting to turn on Mobile Hotspot...")
     command_args = [
         "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
         "-encodedCommand",
         encd_cmd,
     ]
+    subprocess.Popen(command_args, creationflags=subprocess.CREATE_NO_WINDOW)
 
-    print(subprocess.Popen(command_args, creationflags=subprocess.CREATE_NO_WINDOW))
-    print("Turned on Wifi hotspot")
-    start_server()
+
+def start_server():
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((HOST, PORT))
+            s.listen()
+            print(f"Server LISTENING on {HOST}:{PORT}.")
+
+            while True:
+                conn, addr = s.accept()
+                with conn:
+                    print(f"Connected by : {addr}")
+                    while True:
+                        data = conn.recv(1024)
+                        if not data:
+                            break
+                        command = data.decode("utf-8").strip()
+                        print(f"Received: '{command}'")
+                        response_str = execute_command(command)
+                        conn.sendall(response_str.encode("utf-8"))
+                        print(f"Sent response...")
+    except Exception as e:
+        print(f"Server Error: {e}")
+
+
+if __name__ == "__main__":
+    print("--- SYSTEM CONTROL STARTED ---")
+
+    while True:
+        if is_hotspot_active():
+            print("Hotspot detected (192.168.137.1). Starting Server...")
+            start_server()
+        else:
+            print("Hotspot not detected. Turning it on...")
+            turn_on_hotspot()
+
+            print("Waiting 10 seconds for adapter to initialize...")
+            time.sleep(10)
